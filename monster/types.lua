@@ -1,19 +1,6 @@
 local __DEFAULTS_LOADED = false
 local __TYPE = type
-local types = {}
-
-function types:__add(key, val)
-    types[key] = val
-end
--- unlikely to be useful but why not
-function types:__remove(key)
-    types[key] = nil
-end
-
-function types:get_type(type)
-    return types[type]
-end
-
+local types
 local type = {
     name = "placeholder",
     offensive = {},
@@ -21,72 +8,16 @@ local type = {
     trait = {},
 }
 
--- I will broadly assume that any trait will be "immune" if not marked otherwise when writing code
-
-function types:__update_type_weaknesses() -- updates all values on new type addition
-    for type_attacking, v in pairs(types) do
-        if __TYPE(v) == "table" then
-            print(type_attacking)
-            -- let go of the table completely?
-            -- types[type_defending].defensive = nil
-            for type_defending, strength in pairs(v:get_offensive()) do
-                -- we need to actually have added the type before we can do this probably
-                print(type_defending)
-                if types:get_type(type_defending) and v:get_offensive(type_attacking) then
-                    print(type_attacking, strength)
-                    types:get_type(type_defending):set_defensive(type_attacking,strength)
-                end
-            end
-        end
-    end
-end
-function types:__update_type_strengths(type_attacking) -- updates all values on new type addition
-    if type_attacking then
-        for type_defending, strength in pairs(types:get_type(type_attacking):get_offensive()) do
-            print(type_attacking, type_defending,  strength)
-            types:get_type(type_defending):set_defensive(type_attacking,strength)
-        end
-    else
-        for type_defending, v in pairs(types) do
-            if __TYPE(v) == "table" then
-                print(type_defending)
-                -- let go of the table completely?
-                -- types[type_defending].defensive = nil
-                for type_defending, strength in pairs(v:get_offensive()) do
-                    -- we need to actually have added the type before we can do this probably
-                    print(type_defending)
-                    if types:get_type(type_attacking) and v:get_offensive(type_defending) then
-                        print(type_defending, strength)
-                        types:get_type(type_attacking):set_defensive(type_defending,strength)
-                    end
-                end
-            end
-        end
-    end
-end
-
-function types:new( name, offensive, trait, defensive )
-    local key = tostring(name):lower()
-    if types[key] then
-        error( string.format("Type already exists!\nKey: %s Name: %s", tostring(key), tostring(name) ) )
-        return
-    end
-    types:__add(key,type:new({}, name, offensive, trait, defensive))
-    if __DEFAULTS_LOADED then
-        types:__update_type_strengths("fighting")
-    end
-end
-
 -- defensive last because only custom types will want to specify it
-function type:new( o, name, offensive, trait, defensive )
-    o = o or {}
-    setmetatable(o, self)
+function type:new( name, offensive, trait, defensive )
+    local new_type = {}
+    setmetatable(new_type, self)
     self.__index = self
-    self.name = tostring(name) or "No Type Name Provided"
-    self.offensive = __TYPE(offensive) == "table" and offensive or {}
-    self.defensive = __TYPE(defensive) == "table" and defensive or {}
-    self.status = __TYPE(trait) == "table" and trait or {}
-    return self
+    new_type.name = tostring(name) or "No Type Name Provided"
+    new_type.offensive = __TYPE(offensive) == "table" and offensive or {}
+    new_type.defensive = __TYPE(defensive) == "table" and defensive or {}
+    new_type.status = __TYPE(trait) == "table" and trait or {}
+    return new_type
 end
 
 function type:get_offensive(type)
@@ -109,6 +40,53 @@ end
 function type:set_defensive(type, val)
     self.defensive[type] = val
 end
+
+types = {}
+
+local function __add(key, val)
+    types[key] = val
+end
+-- unlikely to be useful but why not
+local function __remove(key)
+    types[key] = nil
+end
+
+function types:get_type(type)
+    return types[type]
+end
+
+-- I will broadly assume that any trait will be "immune" if not marked otherwise when writing code
+local function __update_type_strengths() -- updates all values on new type addition
+    for type_attacking, values in pairs(types) do
+        if __TYPE(values) == "table" and values.get_offensive then
+            for type_defending, strength in pairs(values:get_offensive()) do
+                if types:get_type(type_defending) then
+                    types:get_type(type_defending):set_defensive(type_attacking,strength)
+                end
+            end
+        end
+    end
+    for type_defending, values in pairs(types) do
+        if __TYPE(values) == "table" and values.get_offensive then
+            for type_attacking, strength in pairs(values:get_defensive()) do
+                if types:get_type(type_attacking) then
+                    types:get_type(type_attacking):set_offensive(type_defending,strength)
+                end
+            end
+        end
+    end
+end
+
+function types:new( name, offensive, trait, defensive )
+    local key = tostring(name):lower()
+    if types[key] then
+        error( string.format("Type already exists!\nKey: %s Name: %s", tostring(key), tostring(name) ) )
+        return
+    end
+    __add(key,type:new(name, offensive, trait, defensive))
+    __update_type_strengths("dragon")
+end
+
 
 types:new(
         "Normal",
@@ -353,7 +331,6 @@ types:new(
             poisoned={type="status"}
         }
 )
-__DEFAULTS_LOADED = true
 types:new(
         "Fairy",
         {
@@ -365,37 +342,5 @@ types:new(
             steel = 0.5
         }
 )
-__DEFAULTS_LOADED = true
---[[
-types:new(
-        "Gamer",
-        {
-            fighting = 0,
-            normal = 0,
-            grass = 0,
-            dark = 2,
-            bug = 2,
-            fairy = 2
-        },
-        {poison={type="status"}},
-        {
-            fighting = 2,
-            normal = 4,
-            grass = 6,
-            fairy = 0.5
-        }
-)
-for k, v in pairs (types.fighting.offensive) do
-   print(k, v)
-end
-for k, v in pairs (types.fighting.defensive) do
-   print(k, v)
-end
---]]
-types:__update_type_strengths("fighting")
-for k, v in pairs (types.fighting.offensive) do
-    print(k, v)
-end
-for k, v in pairs (types.fighting.defensive) do
-    print(k, v)
-end
+
+return types
